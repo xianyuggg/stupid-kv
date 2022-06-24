@@ -11,11 +11,15 @@ import (
 type Manager struct {
 	curTid base.Tid
 
-	guard *sync.Mutex
+	tidsGuard  *sync.Mutex
+	flushGuard *sync.Mutex
 
 	curActiveTids []base.Tid
 
 	commitChannel chan base.Tid
+
+	tid2writeSet *sync.Map
+	key2lock     *sync.Map // used for protect write-write conflict
 }
 
 var instance *Manager
@@ -26,30 +30,40 @@ func GetManagerInstance() *Manager {
 		log.Info("Transaction manager starts to init")
 		instance = &Manager{
 			curTid:        0,
-			guard:         &sync.Mutex{},
+			tidsGuard:     &sync.Mutex{},
+			flushGuard:    &sync.Mutex{},
 			curActiveTids: make([]base.Tid, 0),
 			commitChannel: make(chan base.Tid, 100),
+
+			tid2writeSet: &sync.Map{},
+			key2lock:     &sync.Map{},
 		}
+		instance.Load()
 	})
 	return instance
 }
 
-func (m *Manager) AllocateNewTid() base.Tid {
-	m.guard.Lock()
-	defer m.guard.Unlock()
+func (m *Manager) GetCurrentTid() base.Tid {
+	return m.curTid
+}
 
+func (m *Manager) AllocateNewTid() base.Tid {
+	m.tidsGuard.Lock()
+	defer m.tidsGuard.Unlock()
 	// seems atomic doesn't work
 	retVal := atomic.LoadInt64((*int64)(&m.curTid))
 	atomic.AddInt64((*int64)(&m.curTid), 1)
-
 	return base.Tid(retVal)
 }
 
 func (m *Manager) BeginTxn() base.Tid {
 	newTid := m.AllocateNewTid()
-	m.guard.Lock()
+	m.tidsGuard.Lock()
 	m.curActiveTids = append(m.curActiveTids, newTid)
-	m.guard.Unlock()
+	m.FlushTid()
+	m.tidsGuard.Unlock()
+
+	m.tid2writeSet.Store(newTid, &sync.Map{})
 	log.Infof("txn %v start", newTid)
 	return newTid
 }
@@ -64,32 +78,54 @@ func remove(l []base.Tid, item base.Tid) []base.Tid {
 }
 
 func (m *Manager) CommitTxn(tid base.Tid) error {
-	m.guard.Lock()
-	remove(m.curActiveTids, tid)
-	m.guard.Unlock()
+	m.tidsGuard.Lock()
+	m.curActiveTids = remove(m.curActiveTids, tid)
+	m.FlushTid()
+	m.tidsGuard.Unlock()
 	kv.GetManagerInstance().Flush()
 	log.Infof("txn %v commit", tid)
 	m.commitChannel <- tid
+	if ws, ok := m.tid2writeSet.Load(tid); ok {
+		ws.(*sync.Map).Range(func(key, value interface{}) bool {
+			m.releaseWriteLock(key.(base.KeyT), tid)
+			return true
+		})
+	} else {
+		log.Error("txn not exist")
+	}
+	m.tid2writeSet.Delete(tid)
+
 	return nil
 }
 
 func (m *Manager) AbortTxn(tid base.Tid) error {
-	m.guard.Lock()
-	remove(m.curActiveTids, tid)
-	m.guard.Unlock()
+	m.tidsGuard.Lock()
+	m.curActiveTids = remove(m.curActiveTids, tid)
+	m.FlushTid()
+	m.tidsGuard.Unlock()
 
 	for _, txnOp := range GetUndoLoggerInstance().GetTidOps(tid) {
 		kv.GetManagerInstance().UnrollKeyByTid(txnOp.key, tid)
 	}
 
 	kv.GetManagerInstance().Flush()
+
+	if ws, ok := m.tid2writeSet.Load(tid); ok {
+		ws.(*sync.Map).Range(func(key, value interface{}) bool {
+			m.releaseWriteLock(key.(base.KeyT), tid)
+			return true
+		})
+	} else {
+		log.Error("txn not exist")
+	}
+	m.tid2writeSet.Delete(tid)
 	log.Infof("txn %v abort", tid)
 	return nil
 }
 
 func (m *Manager) Put(key base.KeyT, value base.ValueT, tid base.Tid) error {
 	kvStore := kv.GetManagerInstance()
-
+	m.acquireWriteLock(key, tid)
 	kvStore.Put(key, value, tid)
 	GetUndoLoggerInstance().AppendOp(tid, TxnOp{
 		op:  opPut,
@@ -106,8 +142,10 @@ func (m *Manager) Get(key base.KeyT, tid base.Tid) base.ValueT {
 
 	if ret == base.VALUE_NOT_COMMIT {
 		// wait until value is commit
+		log.Info("read uncommitted value and wait")
 		for {
-			var _ = <-m.commitChannel
+			var c = <-m.commitChannel
+			log.Info("Txn ", c, " committed and channel value recv")
 			ret := kvStore.Get(key, tid, m.curActiveTids)
 			if ret == base.VALUE_NOT_COMMIT {
 				continue
@@ -122,7 +160,7 @@ func (m *Manager) Get(key base.KeyT, tid base.Tid) base.ValueT {
 
 func (m *Manager) Inc(key base.KeyT, tid base.Tid) error {
 	kvStore := kv.GetManagerInstance()
-
+	m.acquireWriteLock(key, tid)
 	kvStore.Inc(key, tid)
 
 	GetUndoLoggerInstance().AppendOp(tid, TxnOp{
@@ -135,7 +173,7 @@ func (m *Manager) Inc(key base.KeyT, tid base.Tid) error {
 
 func (m *Manager) Dec(key base.KeyT, tid base.Tid) error {
 	kvStore := kv.GetManagerInstance()
-
+	m.acquireWriteLock(key, tid)
 	kvStore.Dec(key, tid)
 
 	GetUndoLoggerInstance().AppendOp(tid, TxnOp{
@@ -148,7 +186,7 @@ func (m *Manager) Dec(key base.KeyT, tid base.Tid) error {
 
 func (m *Manager) Del(key base.KeyT, tid base.Tid) error {
 	kvStore := kv.GetManagerInstance()
-
+	m.acquireWriteLock(key, tid)
 	kvStore.Del(key, tid)
 
 	GetUndoLoggerInstance().AppendOp(tid, TxnOp{

@@ -95,25 +95,21 @@ func Testcase33(wg *sync.WaitGroup) {
 func TestCase4() {
 	kvManager := kv.GetManagerInstance()
 
-	println("VALUE_NOT_VALID : ", 0xdddddd)
-	println("VALUE_NOT_COMMIT: ", 0xeeeeee)
-	println("VALUE_NOT_FOUND : ", 0xffffff)
-
-	println(kvManager.Get("A", 20000, []base.Tid{}))
-	println(kvManager.Get("B", 20000, []base.Tid{}))
-	kvManager.Put("A", 1, 0)
-	kvManager.Put("B", 1, 0)
+	println(kvManager.Get("A", 200000, []base.Tid{}))
+	println(kvManager.Get("B", 200000, []base.Tid{}))
+	kvManager.Put("A", 1, txn.GetManagerInstance().GetCurrentTid())
+	kvManager.Put("B", 1, txn.GetManagerInstance().GetCurrentTid())
 
 	wg := sync.WaitGroup{}
 
-	wg.Add(3)
-	for i := 0; i < 1; i++ {
+	wg.Add(30)
+	for i := 0; i < 10; i++ {
 		go TestCase41(&wg)
 	}
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 10; i++ {
 		go TestCase41(&wg)
 	}
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 10; i++ {
 		go TestCase41(&wg)
 	}
 	wg.Wait()

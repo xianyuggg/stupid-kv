@@ -17,7 +17,7 @@ type Manager struct {
 	//kv map[base.KeyT]ValueSlot
 	kv         *sync.Map
 	slotGuard  map[base.KeyT]*sync.RWMutex
-	mapGuard   *sync.Mutex
+	mapGuard   *sync.Mutex // used for guarding slotguard (concurrent map modify)
 	flushGuard *sync.Mutex
 }
 
@@ -57,9 +57,9 @@ func (m *Manager) Put(key base.KeyT, value base.ValueT, tid base.Tid) {
 		length := len(slotCopy.values)
 		slotCopy.tidsEnd[length-1] = tid // update last tid
 
-		//if tid < slotCopy.tidsBegin[length-1] {
-		//	return txn.ErrorWriteOlderVersion
-		//}
+		if tid < slotCopy.tidsBegin[length-1] {
+			log.Error("write cover with older tid")
+		}
 
 		slotCopy.values = append(slotCopy.values, value)
 		slotCopy.tidsBegin = append(slotCopy.tidsBegin, tid)

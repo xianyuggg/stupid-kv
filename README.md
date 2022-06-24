@@ -7,9 +7,12 @@ Supported Features
 + Persistent to disk (json format)
 + Transaction supported using 2PL protocol
   + begin/commit/abort
++ MVCC protocol
+  + not fully tested yet
+  + gc not implemented
 
 TODOS
-+ MVCC protocol
 + Undo log has not been persistent yet
 + Add persistent config file
++ Interactive query
 + ...

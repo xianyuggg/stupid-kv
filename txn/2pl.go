@@ -1,5 +1,10 @@
 package txn
 
+import (
+	"stupid-kv/base"
+	"sync"
+)
+
 //type Manager struct {
 //	curTid base.Tid
 //
@@ -8,7 +13,7 @@ package txn
 //	readSet *sync.Map
 //	//readSet map[base.Tid]map[base.KeyT]int
 //	lockMap *sync.Map
-//	guard   *sync.Mutex
+//	tidsGuard   *sync.Mutex
 //
 //	curActiveTids []base.Tid
 //}
@@ -24,18 +29,19 @@ package txn
 //	}
 //}
 //
-//func (m *Manager) acquireWriteLock(key base.KeyT, tid base.Tid) {
-//	tmp, _ := m.writeSet.Load(tid)
-//	ws := tmp.(*sync.Map)
-//	if _, ok := ws.Load(key); !ok {
-//		ws.Store(key, 1)
-//		if _, ok := m.lockMap.Load(key); !ok {
-//			m.lockMap.Store(key, &sync.RWMutex{})
-//		}
-//		rw, _ := m.lockMap.Load(key)
-//		rw.(*sync.RWMutex).Lock()
-//	}
-//}
+func (m *Manager) acquireWriteLock(key base.KeyT, tid base.Tid) {
+	tmp, _ := m.tid2writeSet.Load(tid)
+	ws := tmp.(*sync.Map)
+	if _, ok := ws.Load(key); !ok {
+		ws.Store(key, 1)
+		if _, ok := m.key2lock.Load(key); !ok {
+			m.key2lock.Store(key, &sync.RWMutex{})
+		}
+		rw, _ := m.key2lock.Load(key)
+		rw.(*sync.RWMutex).Lock()
+	}
+}
+
 //
 //func (m *Manager) releaseReadLock(key base.KeyT, tid base.Tid) {
 //	if rw, ok := m.lockMap.Load(key); ok {
@@ -43,8 +49,8 @@ package txn
 //	}
 //}
 //
-//func (m *Manager) releaseWriteLock(key base.KeyT, tid base.Tid) {
-//	if rw, ok := m.lockMap.Load(key); ok {
-//		rw.(*sync.RWMutex).Unlock()
-//	}
-//}
+func (m *Manager) releaseWriteLock(key base.KeyT, tid base.Tid) {
+	if rw, ok := m.key2lock.Load(key); ok {
+		rw.(*sync.RWMutex).Unlock()
+	}
+}
