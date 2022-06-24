@@ -1,13 +1,13 @@
 # STUPID-KV
-A simple KV database implemented in Golang, course project for THU2022 Spring
+A simple KV database implemented in Golang, course project for THU2022 Spring (Big Data)
 
 Supported Features
-+ Set/Get/Add/Del operations
-+ Concurrency support
-+ Persistent to disk (using json)
-+ Transaction protocols using 2PL
++ Put/Get/Inc/Dec/Del operations
++ Concurrency support using `sync.Map`
++ Persistent to disk (json format)
++ Transaction supported using 2PL protocol
   + begin/commit/abort
 
 TODOS
-+ MVCC protocols
++ MVCC protocol
 + ...

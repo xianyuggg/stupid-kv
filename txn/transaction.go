@@ -20,7 +20,7 @@ type Manager struct {
 	//wsGuard *sync.Mutex
 	//rsGuard *sync.Mutex
 	//lmGuard *sync.Mutex
-	//guard   *sync.Mutex
+	guard *sync.Mutex
 }
 
 var instance *Manager
@@ -34,37 +34,33 @@ func GetManagerInstance() *Manager {
 			lockMap:  &sync.Map{},
 			writeSet: &sync.Map{},
 			readSet:  &sync.Map{},
+			guard:    &sync.Mutex{},
 		}
 	})
 	return instance
 }
 
 func (m *Manager) acquireReadLock(key base.KeyT, tid base.Tid) {
-	if tidMap, ok := m.readSet.Load(tid); ok {
-		tmp := tidMap.(*sync.Map)
-		if _, ok := tmp.Load(key); !ok {
-			tmp.Store(key, 1)
-			if rw, ok := m.lockMap.Load(key); ok {
-				rw.(*sync.RWMutex).RLock()
-			}
+	tmp, _ := m.readSet.Load(tid)
+	rs := tmp.(*sync.Map)
+	if _, ok := rs.Load(key); !ok {
+		rs.Store(key, 1)
+		if rw, ok := m.lockMap.Load(key); ok {
+			rw.(*sync.RWMutex).RLock()
 		}
-
 	}
 }
 
 func (m *Manager) acquireWriteLock(key base.KeyT, tid base.Tid) {
-
-	if tidMap, ok := m.writeSet.Load(tid); ok {
-		tmp := tidMap.(*sync.Map)
-		if _, ok := tmp.Load(key); !ok {
-			tmp.Store(key, 1)
-			if _, ok := m.lockMap.Load(key); !ok {
-				m.lockMap.Store(key, &sync.RWMutex{})
-			}
-			rw, _ := m.lockMap.Load(key)
-			rw.(*sync.RWMutex).Lock()
+	tmp, _ := m.writeSet.Load(tid)
+	ws := tmp.(*sync.Map)
+	if _, ok := ws.Load(key); !ok {
+		ws.Store(key, 1)
+		if _, ok := m.lockMap.Load(key); !ok {
+			m.lockMap.Store(key, &sync.RWMutex{})
 		}
-
+		rw, _ := m.lockMap.Load(key)
+		rw.(*sync.RWMutex).Lock()
 	}
 }
 
@@ -72,7 +68,6 @@ func (m *Manager) releaseReadLock(key base.KeyT, tid base.Tid) {
 	if rw, ok := m.lockMap.Load(key); ok {
 		rw.(*sync.RWMutex).RUnlock()
 	}
-
 }
 
 func (m *Manager) releaseWriteLock(key base.KeyT, tid base.Tid) {
@@ -82,8 +77,13 @@ func (m *Manager) releaseWriteLock(key base.KeyT, tid base.Tid) {
 }
 
 func (m *Manager) AllocateNewTid() base.Tid {
+	m.guard.Lock()
+	// seems atomic doesn't work
 	retVal := atomic.LoadInt64((*int64)(&m.curTid))
 	atomic.AddInt64((*int64)(&m.curTid), 1)
+
+	m.guard.Unlock()
+
 	return base.Tid(retVal)
 }
 
@@ -189,7 +189,7 @@ func (m *Manager) CommitTxn(tid base.Tid) error {
 	}
 	if rs, ok := m.readSet.Load(tid); ok {
 		rs.(*sync.Map).Range(func(key, value interface{}) bool {
-			m.releaseWriteLock(key.(base.KeyT), tid)
+			m.releaseReadLock(key.(base.KeyT), tid)
 			return true
 		})
 	} else {

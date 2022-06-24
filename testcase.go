@@ -93,19 +93,21 @@ func Testcase33(wg *sync.WaitGroup) {
 
 func TestCase4() {
 	kvManager := kv.GetManagerInstance()
-	kvManager.Put("A", 1, 0)
-	kvManager.Put("B", 1, 0)
+	println(kvManager.Get("A", 1))
+	println(kvManager.Get("B", 1))
+	//kvManager.Put("A", 1, 0)
+	//kvManager.Put("B", 1, 0)
 
 	wg := sync.WaitGroup{}
 
-	wg.Add(60)
-	for i := 0; i < 20; i++ {
+	wg.Add(300)
+	for i := 0; i < 100; i++ {
 		go TestCase41(&wg)
 	}
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 100; i++ {
 		go TestCase41(&wg)
 	}
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 100; i++ {
 		go TestCase41(&wg)
 	}
 	wg.Wait()
