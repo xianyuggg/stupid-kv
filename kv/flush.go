@@ -55,6 +55,8 @@ func UnmarshalJSON(data []byte) (*sync.Map, error) {
 }
 
 func (m *Manager) Flush() {
+	m.flushGuard.Lock()
+	defer m.flushGuard.Unlock()
 	jsonByte, err := MarshalJSON(m.kv)
 	if err != nil {
 		log.Error("flush error: ", err)

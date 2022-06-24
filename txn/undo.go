@@ -9,8 +9,9 @@ import (
 type OpType = int
 
 const (
-	opAdd = 1 << iota
-	opSet
+	opInc = 1 << iota
+	opDec
+	opPut
 	opDel
 )
 
