@@ -14,21 +14,25 @@ func valueSlot2String(slot ValueSlot) string {
 	retString := ""
 	for i := 0; i < len(slot.values); i++ {
 		retString += strconv.Itoa(int(slot.values[i])) + " "
-		retString += strconv.Itoa(int(slot.tids[i])) + " "
+		retString += strconv.Itoa(int(slot.tidsBegin[i])) + " "
+		retString += strconv.Itoa(int(slot.tidsEnd[i])) + " "
 	}
 	return strings.Trim(retString, " ")
 }
 func string2ValueSlot(s string) ValueSlot {
 	tmpList := strings.Fields(s)
 	valueSlot := ValueSlot{
-		values: make([]base.ValueT, 0),
-		tids:   make([]base.Tid, 0),
+		values:    make([]base.ValueT, 0),
+		tidsBegin: make([]base.Tid, 0),
+		tidsEnd:   make([]base.Tid, 0),
 	}
-	for i := 0; i < len(tmpList); i += 2 {
+	for i := 0; i < len(tmpList); i += 3 {
 		val, _ := strconv.Atoi(tmpList[i])
-		tid, _ := strconv.Atoi(tmpList[i+1])
+		tid1, _ := strconv.Atoi(tmpList[i+1])
+		tid2, _ := strconv.Atoi(tmpList[i+2])
 		valueSlot.values = append(valueSlot.values, base.ValueT(val))
-		valueSlot.tids = append(valueSlot.tids, base.Tid(tid))
+		valueSlot.tidsBegin = append(valueSlot.tidsBegin, base.Tid(tid1))
+		valueSlot.tidsEnd = append(valueSlot.tidsEnd, base.Tid(tid2))
 	}
 	return valueSlot
 }
@@ -79,4 +83,9 @@ func (m *Manager) Load() {
 		log.Error("load to json error: ", err)
 	}
 	m.kv = tmpMap
+
+	m.kv.Range(func(k, v interface{}) bool {
+		m.slotGuard[k.(base.KeyT)] = &sync.RWMutex{}
+		return true
+	})
 }

@@ -11,4 +11,5 @@ Supported Features
 TODOS
 + MVCC protocol
 + Undo log has not been persistent yet
++ Add persistent config file
 + ...

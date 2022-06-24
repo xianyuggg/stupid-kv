@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"stupid-kv/base"
 	"stupid-kv/kv"
 	log "stupid-kv/logutil"
 	"stupid-kv/txn"
@@ -14,24 +15,24 @@ func TestCase1() {
 	kvManager.Put("B", 4, 1)
 	kvManager.Inc("A", 1)
 	kvManager.Inc("B", 1)
-	println(kvManager.Get("A", 1))
-	println(kvManager.Get("B", 1))
+	println(kvManager.Get("A", 1, []base.Tid{}))
+	println(kvManager.Get("B", 1, []base.Tid{}))
 	kvManager.Del("A", 1)
 	kvManager.Del("B", 1)
 
 	kvManager.Put("A", 5, 1)
-	println(kvManager.Get("A", 1))
-	println(kvManager.Get("B", 1))
+	println(kvManager.Get("A", 1, []base.Tid{}))
+	println(kvManager.Get("B", 1, []base.Tid{}))
 	kvManager.Put("B", 5, 1)
-	println(kvManager.Get("B", 1))
+	println(kvManager.Get("B", 1, []base.Tid{}))
 
 	kvManager.Flush()
 }
 
 func TestCase2() {
 	kvManager := kv.GetManagerInstance()
-	println(kvManager.Get("A", 1))
-	println(kvManager.Get("B", 1))
+	println(kvManager.Get("A", 1, []base.Tid{}))
+	println(kvManager.Get("B", 1, []base.Tid{}))
 }
 
 func TestCase3() {
@@ -53,9 +54,9 @@ func Testcase31(wg *sync.WaitGroup) {
 	kvManager.Inc("A", 1)
 	kvManager.Inc("B", 1)
 
-	fmt.Printf("3-1 A: %v\n", kvManager.Get("A", 1))
+	fmt.Printf("3-1 A: %v\n", kvManager.Get("A", 1, []base.Tid{}))
 	kvManager.Del("A", 1)
-	fmt.Printf("3-1 B: %v\n", kvManager.Get("B", 1))
+	fmt.Printf("3-1 B: %v\n", kvManager.Get("B", 1, []base.Tid{}))
 	kvManager.Del("B", 1)
 
 	wg.Done()
@@ -68,9 +69,9 @@ func Testcase32(wg *sync.WaitGroup) {
 	kvManager.Inc("C", 1)
 	kvManager.Inc("D", 1)
 
-	fmt.Printf("3-2 C: %v\n", kvManager.Get("C", 1))
+	fmt.Printf("3-2 C: %v\n", kvManager.Get("C", 1, []base.Tid{}))
 	kvManager.Del("C", 1)
-	fmt.Printf("3-2 D: %v\n", kvManager.Get("D", 1))
+	fmt.Printf("3-2 D: %v\n", kvManager.Get("D", 1, []base.Tid{}))
 	kvManager.Del("D", 1)
 
 	wg.Done()
@@ -83,9 +84,9 @@ func Testcase33(wg *sync.WaitGroup) {
 	kvManager.Inc("E", 1)
 	kvManager.Inc("F", 1)
 
-	fmt.Printf("3-3 E: %v\n", kvManager.Get("E", 1))
+	fmt.Printf("3-3 E: %v\n", kvManager.Get("E", 1, []base.Tid{}))
 	kvManager.Del("E", 1)
-	fmt.Printf("3-3 F: %v\n", kvManager.Get("F", 1))
+	fmt.Printf("3-3 F: %v\n", kvManager.Get("F", 1, []base.Tid{}))
 	kvManager.Del("F", 1)
 
 	wg.Done()
@@ -93,21 +94,26 @@ func Testcase33(wg *sync.WaitGroup) {
 
 func TestCase4() {
 	kvManager := kv.GetManagerInstance()
-	println(kvManager.Get("A", 1))
-	println(kvManager.Get("B", 1))
+
+	println("VALUE_NOT_VALID : ", 0xdddddd)
+	println("VALUE_NOT_COMMIT: ", 0xeeeeee)
+	println("VALUE_NOT_FOUND : ", 0xffffff)
+
+	println(kvManager.Get("A", 20000, []base.Tid{}))
+	println(kvManager.Get("B", 20000, []base.Tid{}))
 	kvManager.Put("A", 1, 0)
 	kvManager.Put("B", 1, 0)
 
 	wg := sync.WaitGroup{}
 
-	wg.Add(1200)
-	for i := 0; i < 400; i++ {
+	wg.Add(3)
+	for i := 0; i < 1; i++ {
 		go TestCase41(&wg)
 	}
-	for i := 0; i < 400; i++ {
+	for i := 0; i < 1; i++ {
 		go TestCase41(&wg)
 	}
-	for i := 0; i < 400; i++ {
+	for i := 0; i < 1; i++ {
 		go TestCase41(&wg)
 	}
 	wg.Wait()
