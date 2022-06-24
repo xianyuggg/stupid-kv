@@ -98,16 +98,16 @@ func TestCase4() {
 
 	wg := sync.WaitGroup{}
 
-	wg.Add(20)
-	for i := 0; i < 5; i++ {
+	wg.Add(60)
+	for i := 0; i < 20; i++ {
 		go TestCase41(&wg)
 	}
-	//for i := 0; i < 20; i++ {
-	//	go TestCase41(&wg)
-	//}
-	//for i := 0; i < 20; i++ {
-	//	go TestCase41(&wg)
-	//}
+	for i := 0; i < 20; i++ {
+		go TestCase41(&wg)
+	}
+	for i := 0; i < 20; i++ {
+		go TestCase41(&wg)
+	}
 	wg.Wait()
 }
 

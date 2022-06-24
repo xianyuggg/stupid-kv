@@ -11,17 +11,16 @@ import (
 type Manager struct {
 	curTid base.Tid
 
-	//writeSet *sync.Map
-	writeSet map[base.Tid]map[base.KeyT]int
-	//readSet  *sync.Map
-	readSet map[base.Tid]map[base.KeyT]int
-	//lockMap	 *sync.Map
-
-	lockMap map[base.KeyT]*sync.RWMutex
-	wsGuard *sync.Mutex
-	rsGuard *sync.Mutex
-	lmGuard *sync.Mutex
-	guard   *sync.Mutex
+	writeSet *sync.Map
+	//writeSet map[base.Tid]map[base.KeyT]int
+	readSet *sync.Map
+	//readSet map[base.Tid]map[base.KeyT]int
+	lockMap *sync.Map
+	//lockMap map[base.KeyT]*sync.RWMutex
+	//wsGuard *sync.Mutex
+	//rsGuard *sync.Mutex
+	//lmGuard *sync.Mutex
+	//guard   *sync.Mutex
 }
 
 var instance *Manager
@@ -32,48 +31,54 @@ func GetManagerInstance() *Manager {
 		log.Info("Transaction manager starts to init")
 		instance = &Manager{
 			curTid:   0,
-			lockMap:  make(map[base.KeyT]*sync.RWMutex),
-			writeSet: make(map[base.Tid]map[base.KeyT]int),
-			readSet:  make(map[base.Tid]map[base.KeyT]int),
-			guard:    &sync.Mutex{},
+			lockMap:  &sync.Map{},
+			writeSet: &sync.Map{},
+			readSet:  &sync.Map{},
 		}
 	})
 	return instance
 }
 
 func (m *Manager) acquireReadLock(key base.KeyT, tid base.Tid) {
+	if tidMap, ok := m.readSet.Load(tid); ok {
+		tmp := tidMap.(*sync.Map)
+		if _, ok := tmp.Load(key); !ok {
+			tmp.Store(key, 1)
+			if rw, ok := m.lockMap.Load(key); ok {
+				rw.(*sync.RWMutex).RLock()
+			}
+		}
 
-	if _, ok := m.readSet[tid][key]; !ok {
-		m.guard.Lock()
-		m.readSet[tid][key] = 1
-		m.guard.Unlock()
-
-		m.lockMap[key].RLock()
 	}
 }
 
 func (m *Manager) acquireWriteLock(key base.KeyT, tid base.Tid) {
 
-	if _, ok := m.lockMap[key]; !ok {
-		m.lockMap[key] = &sync.RWMutex{}
+	if tidMap, ok := m.writeSet.Load(tid); ok {
+		tmp := tidMap.(*sync.Map)
+		if _, ok := tmp.Load(key); !ok {
+			tmp.Store(key, 1)
+			if _, ok := m.lockMap.Load(key); !ok {
+				m.lockMap.Store(key, &sync.RWMutex{})
+			}
+			rw, _ := m.lockMap.Load(key)
+			rw.(*sync.RWMutex).Lock()
+		}
+
 	}
-	if _, ok := m.writeSet[tid][key]; !ok {
-		m.guard.Lock()
-		m.writeSet[tid][key] = 1
-		m.guard.Unlock()
-
-		m.lockMap[key].Lock()
-
-	}
-
 }
 
 func (m *Manager) releaseReadLock(key base.KeyT, tid base.Tid) {
-	m.lockMap[key].RUnlock()
+	if rw, ok := m.lockMap.Load(key); ok {
+		rw.(*sync.RWMutex).RUnlock()
+	}
+
 }
 
 func (m *Manager) releaseWriteLock(key base.KeyT, tid base.Tid) {
-	m.lockMap[key].Unlock()
+	if rw, ok := m.lockMap.Load(key); ok {
+		rw.(*sync.RWMutex).Unlock()
+	}
 }
 
 func (m *Manager) AllocateNewTid() base.Tid {
@@ -84,10 +89,10 @@ func (m *Manager) AllocateNewTid() base.Tid {
 
 func (m *Manager) BeginTxn() base.Tid {
 	newTid := m.AllocateNewTid()
-	m.guard.Lock()
-	m.writeSet[newTid] = make(map[base.KeyT]int)
-	m.readSet[newTid] = make(map[base.KeyT]int)
-	m.guard.Unlock()
+
+	m.writeSet.Store(newTid, &sync.Map{})
+	m.readSet.Store(newTid, &sync.Map{})
+
 	log.Infof("txn %v start", newTid)
 	return newTid
 }
@@ -174,24 +179,26 @@ func (m *Manager) Del(key base.KeyT, tid base.Tid) error {
 }
 
 func (m *Manager) CommitTxn(tid base.Tid) error {
-	if writeSet, ok := m.writeSet[tid]; ok {
-		for k, _ := range writeSet {
-			m.releaseWriteLock(k, tid)
-		}
+	if ws, ok := m.writeSet.Load(tid); ok {
+		ws.(*sync.Map).Range(func(key, value interface{}) bool {
+			m.releaseWriteLock(key.(base.KeyT), tid)
+			return true
+		})
 	} else {
 		log.Error("txn not exist")
 	}
-	if readSet, ok := m.readSet[tid]; ok {
-		for k, _ := range readSet {
-			m.releaseReadLock(k, tid)
-		}
+	if rs, ok := m.readSet.Load(tid); ok {
+		rs.(*sync.Map).Range(func(key, value interface{}) bool {
+			m.releaseWriteLock(key.(base.KeyT), tid)
+			return true
+		})
 	} else {
 		log.Error("txn not exist")
 	}
-	m.guard.Lock()
-	delete(m.writeSet, tid)
-	delete(m.readSet, tid)
-	m.guard.Unlock()
+
+	m.writeSet.Delete(tid)
+	m.readSet.Delete(tid)
+
 	// TODO: I'm not sure
 	kv.GetManagerInstance().Flush()
 	log.Infof("txn %v commit", tid)
@@ -223,25 +230,26 @@ func (m *Manager) AbortTxn(tid base.Tid) error {
 	}
 
 	// release all locks
-	if writeSet, ok := m.writeSet[tid]; ok {
-		for k, _ := range writeSet {
-			m.releaseWriteLock(k, tid)
-		}
+	if ws, ok := m.writeSet.Load(tid); ok {
+		ws.(*sync.Map).Range(func(key, value interface{}) bool {
+			m.releaseWriteLock(key.(base.KeyT), tid)
+			return true
+		})
 	} else {
 		log.Error("txn not exist")
 	}
-	if readSet, ok := m.readSet[tid]; ok {
-		for k, _ := range readSet {
-			m.releaseReadLock(k, tid)
-		}
+	if rs, ok := m.readSet.Load(tid); ok {
+		rs.(*sync.Map).Range(func(key, value interface{}) bool {
+			m.releaseWriteLock(key.(base.KeyT), tid)
+			return true
+		})
 	} else {
 		log.Error("txn not exist")
 	}
 
-	m.guard.Lock()
-	delete(m.writeSet, tid)
-	delete(m.readSet, tid)
-	m.guard.Unlock()
+	m.writeSet.Delete(tid)
+	m.readSet.Delete(tid)
+
 	kv.GetManagerInstance().Flush()
 	log.Infof("txn %v abort", tid)
 	return nil
