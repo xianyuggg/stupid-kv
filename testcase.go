@@ -100,14 +100,14 @@ func TestCase4() {
 
 	wg := sync.WaitGroup{}
 
-	wg.Add(1200)
-	for i := 0; i < 400; i++ {
+	wg.Add(300)
+	for i := 0; i < 100; i++ {
 		go TestCase41(&wg)
 	}
-	for i := 0; i < 400; i++ {
+	for i := 0; i < 100; i++ {
 		go TestCase41(&wg)
 	}
-	for i := 0; i < 400; i++ {
+	for i := 0; i < 100; i++ {
 		go TestCase41(&wg)
 	}
 	wg.Wait()
