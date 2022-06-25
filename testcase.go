@@ -7,6 +7,7 @@ import (
 	log "stupid-kv/logutil"
 	"stupid-kv/txn"
 	"sync"
+	"time"
 )
 
 func TestCase1() {
@@ -102,88 +103,129 @@ func TestCase4() {
 
 	wg := sync.WaitGroup{}
 
-	wg.Add(30)
-	for i := 0; i < 10; i++ {
-		go TestCase41(&wg)
-	}
-	for i := 0; i < 10; i++ {
-		go TestCase41(&wg)
-	}
-	for i := 0; i < 10; i++ {
-		go TestCase41(&wg)
-	}
-	wg.Wait()
+	go TestCase41(&wg)
+	go TestCase41(&wg)
+	go TestCase41(&wg)
+	time.Sleep(10 * time.Second)
+	//wg.Wait()
 }
 
 func TestCase41(wg *sync.WaitGroup) {
-	txnManager := txn.GetManagerInstance()
-	{
-		tid := txnManager.BeginTxn()
+	for {
+		txnManager := txn.GetManagerInstance()
+		{
+			tid := txnManager.BeginTxn()
 
-		if err := txnManager.Inc("A", tid); err != nil {
-			log.Error("inc error: ", err)
-		}
-		if err := txnManager.Inc("B", tid); err != nil {
-			log.Error("inc error: ", err)
-		}
-		_ = txnManager.Inc("A", tid)
-		_ = txnManager.Inc("B", tid)
-		_ = txnManager.Inc("A", tid)
-		_ = txnManager.Inc("A", tid)
-		_ = txnManager.Inc("B", tid)
-		_ = txnManager.Inc("B", tid)
-		_ = txnManager.Inc("A", tid)
-		_ = txnManager.Inc("B", tid)
+			if err := txnManager.Inc("A", tid); err != nil {
+				log.Error("inc error: ", err)
+			}
+			if err := txnManager.Inc("B", tid); err != nil {
+				log.Error("inc error: ", err)
+			}
+			_ = txnManager.Inc("A", tid)
+			_ = txnManager.Inc("B", tid)
+			_ = txnManager.Inc("A", tid)
+			_ = txnManager.Inc("A", tid)
+			_ = txnManager.Inc("B", tid)
+			_ = txnManager.Inc("B", tid)
+			_ = txnManager.Inc("A", tid)
+			_ = txnManager.Inc("B", tid)
 
-		if err := txnManager.CommitTxn(tid); err != nil {
-			log.Error("commit error: ", err)
+			if err := txnManager.CommitTxn(tid); err != nil {
+				log.Error("commit error: ", err)
+			}
+		}
+		{
+			tid := txnManager.BeginTxn()
+
+			if err := txnManager.Inc("A", tid); err != nil {
+				log.Error("inc error: ", err)
+			}
+			if err := txnManager.Inc("B", tid); err != nil {
+				log.Error("inc error: ", err)
+			}
+			_ = txnManager.Inc("A", tid)
+			_ = txnManager.Inc("B", tid)
+			_ = txnManager.Inc("A", tid)
+			_ = txnManager.Inc("A", tid)
+			_ = txnManager.Inc("B", tid)
+			_ = txnManager.Inc("B", tid)
+			_ = txnManager.Inc("A", tid)
+			_ = txnManager.Inc("B", tid)
+
+			if err := txnManager.CommitTxn(tid); err != nil {
+				log.Error("commit error: ", err)
+			}
+		}
+
+		{
+			tid := txnManager.BeginTxn()
+
+			if err := txnManager.Dec("A", tid); err != nil {
+				log.Error("inc error: ", err)
+			}
+			if err := txnManager.Dec("B", tid); err != nil {
+				log.Error("inc error: ", err)
+			}
+			_ = txnManager.Dec("A", tid)
+			_ = txnManager.Dec("B", tid)
+			_ = txnManager.Dec("A", tid)
+			_ = txnManager.Dec("A", tid)
+			_ = txnManager.Dec("B", tid)
+			_ = txnManager.Dec("B", tid)
+			_ = txnManager.Dec("A", tid)
+			_ = txnManager.Dec("B", tid)
+
+			if err := txnManager.AbortTxn(tid); err != nil {
+				log.Error("commit error: ", err)
+			}
 		}
 	}
-	{
+}
+
+func TestCase5() {
+	kvManager := kv.GetManagerInstance()
+
+	kvManager.Put("A", 0, txn.GetManagerInstance().GetCurrentTid())
+	kvManager.Put("B", 0, txn.GetManagerInstance().GetCurrentTid())
+	kvManager.Put("C", 0, txn.GetManagerInstance().GetCurrentTid())
+
+	wg := &sync.WaitGroup{}
+	//wg.Add(6)
+
+	go TestCase41(wg)
+	go TestCase41(wg)
+	go TestCase41(wg)
+	go TestCase51(wg)
+	go TestCase51(wg)
+	go TestCase51(wg)
+	time.Sleep(10 * time.Second)
+	//wg.Wait()
+}
+
+func TestCase52() {
+	kvManager := kv.GetManagerInstance()
+	println(kvManager.Get("A", 200000, []base.Tid{}))
+	println(kvManager.Get("B", 200000, []base.Tid{}))
+}
+
+func TestCase51(wg *sync.WaitGroup) {
+
+	for {
+		txnManager := txn.GetManagerInstance()
 		tid := txnManager.BeginTxn()
-
-		if err := txnManager.Inc("A", tid); err != nil {
-			log.Error("inc error: ", err)
+		txnManager.Get("A", tid)
+		txnManager.Get("B", tid)
+		txnManager.Get("A", tid)
+		txnManager.Get("B", tid)
+		err := txnManager.Inc("C", tid)
+		if err != nil {
+			return
 		}
-		if err := txnManager.Inc("B", tid); err != nil {
-			log.Error("inc error: ", err)
-		}
-		_ = txnManager.Inc("A", tid)
-		_ = txnManager.Inc("B", tid)
-		_ = txnManager.Inc("A", tid)
-		_ = txnManager.Inc("A", tid)
-		_ = txnManager.Inc("B", tid)
-		_ = txnManager.Inc("B", tid)
-		_ = txnManager.Inc("A", tid)
-		_ = txnManager.Inc("B", tid)
-
-		if err := txnManager.CommitTxn(tid); err != nil {
-			log.Error("commit error: ", err)
+		err = txnManager.CommitTxn(tid)
+		if err != nil {
+			return
 		}
 	}
-
-	{
-		tid := txnManager.BeginTxn()
-
-		if err := txnManager.Dec("A", tid); err != nil {
-			log.Error("inc error: ", err)
-		}
-		if err := txnManager.Dec("B", tid); err != nil {
-			log.Error("inc error: ", err)
-		}
-		_ = txnManager.Dec("A", tid)
-		_ = txnManager.Dec("B", tid)
-		_ = txnManager.Dec("A", tid)
-		_ = txnManager.Dec("A", tid)
-		_ = txnManager.Dec("B", tid)
-		_ = txnManager.Dec("B", tid)
-		_ = txnManager.Dec("A", tid)
-		_ = txnManager.Dec("B", tid)
-
-		if err := txnManager.AbortTxn(tid); err != nil {
-			log.Error("commit error: ", err)
-		}
-	}
-	wg.Done()
 
 }

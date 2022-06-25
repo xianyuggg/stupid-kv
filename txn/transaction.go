@@ -33,7 +33,7 @@ func GetManagerInstance() *Manager {
 			tidsGuard:     &sync.Mutex{},
 			flushGuard:    &sync.Mutex{},
 			curActiveTids: make([]base.Tid, 0),
-			commitChannel: make(chan base.Tid, 100),
+			commitChannel: make(chan base.Tid),
 
 			tid2writeSet: &sync.Map{},
 			key2lock:     &sync.Map{},
@@ -84,7 +84,7 @@ func (m *Manager) CommitTxn(tid base.Tid) error {
 	m.tidsGuard.Unlock()
 	kv.GetManagerInstance().Flush()
 	log.Infof("txn %v commit", tid)
-	m.commitChannel <- tid
+	//m.commitChannel <- tid
 	if ws, ok := m.tid2writeSet.Load(tid); ok {
 		ws.(*sync.Map).Range(func(key, value interface{}) bool {
 			m.releaseWriteLock(key.(base.KeyT), tid)
@@ -142,17 +142,17 @@ func (m *Manager) Get(key base.KeyT, tid base.Tid) base.ValueT {
 
 	if ret == base.VALUE_NOT_COMMIT {
 		// wait until value is commit
-		log.Info("read uncommitted value and wait")
-		for {
-			var c = <-m.commitChannel
-			log.Info("Txn ", c, " committed and channel value recv")
-			ret := kvStore.Get(key, tid, m.curActiveTids)
-			if ret == base.VALUE_NOT_COMMIT {
-				continue
-			} else {
-				return ret
-			}
-		}
+		log.Info("TODO: read uncommitted value and wait")
+		//for {
+		//	var c = <-m.commitChannel
+		//	log.Info("Txn ", c, " committed and channel value recv")
+		//	ret := kvStore.Get(key, tid, m.curActiveTids)
+		//	if ret == base.VALUE_NOT_COMMIT {
+		//		continue
+		//	} else {
+		//		return ret
+		//	}
+		//}
 	}
 
 	return ret
