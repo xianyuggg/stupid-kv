@@ -98,7 +98,7 @@ func (m *Manager) Get(key base.KeyT, tid base.Tid, activeTids []base.Tid) base.V
 
 		for i := length - 1; i >= 0; i-- {
 			if tid >= slotCopy.tidsBegin[i] && tid <= slotCopy.tidsEnd[i] {
-				if contains(activeTids, slotCopy.tidsBegin[i]) {
+				if tid != slotCopy.tidsBegin[i] && contains(activeTids, slotCopy.tidsBegin[i]) {
 					// still an uncommitted tid
 					return base.VALUE_NOT_COMMIT
 				} else {

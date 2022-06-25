@@ -199,7 +199,7 @@ func TestCase5() {
 	go TestCase51(wg)
 	go TestCase51(wg)
 	go TestCase51(wg)
-	time.Sleep(10 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 	//wg.Wait()
 }
 
