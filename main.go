@@ -11,5 +11,5 @@ func main() {
 
 	//TestCase52()
 
-	//TestCase5()
+	TestCase5()
 }

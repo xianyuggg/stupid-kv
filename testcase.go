@@ -199,7 +199,7 @@ func TestCase5() {
 	kvManager.Put("C", 0, txn.GetManagerInstance().GetCurrentTid())
 
 	wg := &sync.WaitGroup{}
-	//wg.Add(6)
+	wg.Add(6000000)
 
 	go TestCase41(wg)
 	go TestCase41(wg)
@@ -207,7 +207,8 @@ func TestCase5() {
 	go TestCase51(wg)
 	go TestCase51(wg)
 	go TestCase51(wg)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Second)
+	kvManager.Flush()
 	//wg.Wait()
 }
 

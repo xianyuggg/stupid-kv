@@ -145,9 +145,8 @@ func (m *Manager) Get(key base.KeyT, tid base.Tid) base.ValueT {
 		log.Infof("tid %v: read uncommitted value and wait %v", tid, waitTid)
 		for {
 			if _, ok := m.commitTidMap.Load(waitTid); ok {
-				log.Infof("Txn %v find %v %v ", tid, waitTid, "find committed in commitTidMap")
-				if ret, _ := kvStore.Get(key, tid, m.curActiveTids); ret == base.VALUE_NOT_VALID || ret == base.VALUE_NOT_COMMIT {
-					log.Error("ret not valid")
+				if ret, waitTid = kvStore.Get(key, tid, m.curActiveTids); ret == base.VALUE_NOT_COMMIT {
+					log.Infof("tid %v: read uncommitted value and wait %v", tid, waitTid)
 				} else {
 					return ret
 				}
