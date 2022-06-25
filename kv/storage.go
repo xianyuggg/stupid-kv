@@ -84,10 +84,10 @@ func contains(s []base.Tid, e base.Tid) bool {
 	return false
 }
 
-func (m *Manager) Get(key base.KeyT, tid base.Tid, activeTids []base.Tid) base.ValueT {
+func (m *Manager) Get(key base.KeyT, tid base.Tid, activeTids []base.Tid) (base.ValueT, base.Tid) {
 	guard, ok := m.slotGuard[key]
 	if !ok {
-		return base.VALUE_NOT_FOUND
+		return base.VALUE_NOT_FOUND, base.NIL_TID
 	}
 	guard.RLock()
 	defer guard.RUnlock()
@@ -100,15 +100,15 @@ func (m *Manager) Get(key base.KeyT, tid base.Tid, activeTids []base.Tid) base.V
 			if tid >= slotCopy.tidsBegin[i] && tid <= slotCopy.tidsEnd[i] {
 				if tid != slotCopy.tidsBegin[i] && contains(activeTids, slotCopy.tidsBegin[i]) {
 					// still an uncommitted tid
-					return base.VALUE_NOT_COMMIT
+					return base.VALUE_NOT_COMMIT, slotCopy.tidsBegin[i]
 				} else {
-					return slotCopy.values[i]
+					return slotCopy.values[i], slotCopy.tidsBegin[i]
 				}
 			}
 		}
-		return base.VALUE_NOT_VALID
+		return base.VALUE_NOT_VALID, base.NIL_TID
 	} else {
-		return base.VALUE_NOT_FOUND
+		return base.VALUE_NOT_FOUND, base.NIL_TID
 	}
 }
 

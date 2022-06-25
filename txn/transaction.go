@@ -16,7 +16,7 @@ type Manager struct {
 
 	curActiveTids []base.Tid
 
-	commitChannel chan base.Tid
+	commitTidMap *sync.Map
 
 	tid2writeSet *sync.Map
 	key2lock     *sync.Map // used for protect write-write conflict
@@ -33,7 +33,7 @@ func GetManagerInstance() *Manager {
 			tidsGuard:     &sync.Mutex{},
 			flushGuard:    &sync.Mutex{},
 			curActiveTids: make([]base.Tid, 0),
-			commitChannel: make(chan base.Tid, 200000),
+			commitTidMap:  &sync.Map{},
 
 			tid2writeSet: &sync.Map{},
 			key2lock:     &sync.Map{},
@@ -84,7 +84,7 @@ func (m *Manager) CommitTxn(tid base.Tid) error {
 	m.tidsGuard.Unlock()
 	kv.GetManagerInstance().Flush()
 	log.Infof("txn %v commit", tid)
-	m.commitChannel <- tid
+	m.commitTidMap.Store(tid, true)
 	if ws, ok := m.tid2writeSet.Load(tid); ok {
 		ws.(*sync.Map).Range(func(key, value interface{}) bool {
 			m.releaseWriteLock(key.(base.KeyT), tid)
@@ -138,21 +138,22 @@ func (m *Manager) Put(key base.KeyT, value base.ValueT, tid base.Tid) error {
 func (m *Manager) Get(key base.KeyT, tid base.Tid) base.ValueT {
 	kvStore := kv.GetManagerInstance()
 
-	ret := kvStore.Get(key, tid, m.curActiveTids)
+	ret, waitTid := kvStore.Get(key, tid, m.curActiveTids)
 
 	if ret == base.VALUE_NOT_COMMIT {
 		// wait until value is commit
-		log.Infof("tid %v: read uncommitted value and wait", tid)
+		log.Infof("tid %v: read uncommitted value and wait %v", tid, waitTid)
 		for {
-			var c = <-m.commitChannel
-			log.Info("Txn", c, "committed and channel value recv")
-			ret := kvStore.Get(key, tid, m.curActiveTids)
-			if ret == base.VALUE_NOT_COMMIT {
-				continue
-			} else {
-				return ret
+			if _, ok := m.commitTidMap.Load(waitTid); ok {
+				log.Infof("Txn %v find %v %v ", tid, waitTid, "find committed in commitTidMap")
+				if ret, _ := kvStore.Get(key, tid, m.curActiveTids); ret == base.VALUE_NOT_VALID || ret == base.VALUE_NOT_COMMIT {
+					log.Error("ret not valid")
+				} else {
+					return ret
+				}
 			}
 		}
+
 	}
 
 	return ret

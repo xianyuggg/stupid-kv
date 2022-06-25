@@ -10,3 +10,4 @@ const MaxInt = int(MaxUint >> 1)
 const MinInt = -MaxInt - 1
 
 var MAX_TID = Tid(MaxInt)
+var NIL_TID = Tid(-1)
